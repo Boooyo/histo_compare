@@ -1,39 +1,57 @@
-import cv2, numpy as np
-import matplotlib.pylab as plt
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from enum import Enum
 
-img1 = cv2.imread('../img/taekwonv1.jpg')
-img2 = cv2.imread('../img/taekwonv2.jpg')
-img3 = cv2.imread('../img/taekwonv3.jpg')
-img4 = cv2.imread('../img/dr_ochanomizu.jpg')
+class HistCompMethod(Enum):
+    CORREL = cv2.HISTCMP_CORREL
+    CHISQR = cv2.HISTCMP_CHISQR
+    INTERSECT = cv2.HISTCMP_INTERSECT
+    BHATTACHARYYA = cv2.HISTCMP_BHATTACHARYYA
 
-cv2.imshow('query', img1)
-imgs = [img1, img2, img3, img4]
-hists = []
-for i, img in enumerate(imgs) :
-    plt.subplot(1,len(imgs),i+1)
-    plt.title('img%d'% (i+1))
-    plt.axis('off') 
-    plt.imshow(img[:,:,::-1])
-    #---① 각 이미지를 HSV로 변환
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    #---② H,S 채널에 대한 히스토그램 계산
-    hist = cv2.calcHist([hsv], [0,1], None, [180,256], [0,180,0, 256])
-    #---③ 0~1로 정규화
-    cv2.normalize(hist, hist, 0, 1, cv2.NORM_MINMAX)
-    hists.append(hist)
+def calculate_normalized_histogram(image):
+    """이미지의 히스토그램을 계산하고 정규화합니다."""
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV) # HSV로 변환
+    hist = cv2.calcHist([hsv], [0, 1], None, [180, 256], [0, 180, 0, 256]) # H, S 채널 히스토그램 계산
+    cv2.normalize(hist, hist, 0, 1, cv2.NORM_MINMAX) # 0~1로 정규화
+    return hist
 
+def compare_histograms(base_hist, comp_hist, method):
+    """지정된 방법을 사용하여 두 히스토그램을 비교합니다."""
+    result = cv2.compareHist(base_hist, comp_hist, method.value)
+    if method == HistCompMethod.INTERSECT: # 교차 분석인 경우
+        result /= np.sum(base_hist) # 비교 대상으로 나누어 1로 정규화
+    return result
 
-query = hists[0]
-methods = {'CORREL' :cv2.HISTCMP_CORREL, 'CHISQR':cv2.HISTCMP_CHISQR, 
-           'INTERSECT':cv2.HISTCMP_INTERSECT,
-           'BHATTACHARYYA':cv2.HISTCMP_BHATTACHARYYA}
-for j, (name, flag) in enumerate(methods.items()):
-    print('%-10s'%name, end='\t')
-    for i, (hist, img) in enumerate(zip(hists, imgs)):
-        #---④ 각 메서드에 따라 img1과 각 이미지의 히스토그램 비교
-        ret = cv2.compareHist(query, hist, flag)
-        if flag == cv2.HISTCMP_INTERSECT: #교차 분석인 경우 
-            ret = ret/np.sum(query)        #비교대상으로 나누어 1로 정규화
-        print("img%d:%7.2f"% (i+1 , ret), end='\t')
-    print()
-plt.show()
+def plot_images(images, titles):
+    """이미지 목록과 그 제목으로 이미지를 표시합니다."""
+    plt.figure(figsize=(10, 2.5))
+    for i, (image, title) in enumerate(zip(images, titles)):
+        plt.subplot(1, len(images), i + 1)
+        plt.imshow(image[:, :, ::-1])
+        plt.title(title)
+        plt.axis('off')
+    plt.show()
+
+def main():
+    # 이미지 로드
+    image_paths = ['../img/taekwonv1.jpg', '../img/taekwonv2.jpg', '../img/taekwonv3.jpg', '../img/dr_ochanomizu.jpg']
+    images = [cv2.imread(path) for path in image_paths]
+
+    # 히스토그램 계산 및 정규화
+    hists = [calculate_normalized_histogram(img) for img in images]
+
+    # 히스토그램 비교
+    methods = [HistCompMethod.CORREL, HistCompMethod.CHISQR, HistCompMethod.INTERSECT, HistCompMethod.BHATTACHARYYA]
+    for method in methods:
+        print(f'{method.name:<15}', end='')
+        for i, hist in enumerate(hists):
+            similarity = compare_histograms(hists[0], hist, method)
+            print(f"img{i+1}:{similarity:7.2f}", end='\t')
+        print()
+
+    # 이미지 표시
+    plot_images(images, ['img1', 'img2', 'img3', 'img4'])
+
+if __name__ == "__main__":
+    main()
